@@ -3,19 +3,19 @@ Translation Service — Genre-aware Vietnamese translation via OpenRouter API.
 Batches all bubbles per page into a single API call using [BUBBLE_N] tags.
 """
 import os
-import httpx
 import json
+import asyncio
 from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
+from google import genai
 
 # Explicitly load .env from backend/ directory
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 print(f"[Translation] Loading .env from: {_env_path} (exists={_env_path.exists()})")
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+MODEL = "gemini-2.5-flash"
 
 # ── Genre Prompt Templates ─────────────────────────────
 
@@ -156,40 +156,26 @@ async def translate_bubbles(
     system_prompt = build_prompt(genre)
     
     # If no API key, return placeholder translations (just the OCR text)
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
-    if not api_key:
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key or "your_gemini" in api_key:
         return [b.get('ocr_text', b.get('text', '')) for b in bubbles]
     
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "http://localhost:3000",
-                    "X-Title": "MangaDich",
-                },
-                json={
-                    "model": MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_input},
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 4096,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            output_text = data["choices"][0]["message"]["content"]
-            return parse_translation_output(output_text, len(bubbles))
+        client = genai.Client(api_key=api_key)
+        
+        # Combine system prompt and user input for Gemini
+        prompt = f"System Instructions:\n{system_prompt}\n\nTask:\n{user_input}"
+        
+        # Run standard genai call in thread to avoid blocking FastAPI
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=MODEL,
+            contents=prompt
+        )
+        
+        output_text = response.text
+        return parse_translation_output(output_text, len(bubbles))
     
-    except httpx.HTTPStatusError as e:
-        print(f"Translation HTTP error: {e.response.text}")
-        return [f"[Lỗi API] {b.get('ocr_text', b.get('text', ''))}" for b in bubbles]
     except Exception as e:
-        print(f"Translation error: {e}")
-        # Fallback: return original text with prefix
+        print(f"[Translation ERROR] Gemini SDK Error: {type(e).__name__}: {str(e)}")
         return [f"[Lỗi dịch] {b.get('ocr_text', b.get('text', ''))}" for b in bubbles]
