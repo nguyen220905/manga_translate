@@ -6,12 +6,16 @@ import os
 import httpx
 import json
 from typing import Optional
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Explicitly load .env from backend/ directory
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_env_path)
+print(f"[Translation] Loading .env from: {_env_path} (exists={_env_path.exists()})")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemini-flash-2.0"
+MODEL = "meta-llama/llama-3.1-8b-instruct:free"
 
 # ── Genre Prompt Templates ─────────────────────────────
 
@@ -163,6 +167,8 @@ async def translate_bubbles(
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost:3000",
+                    "X-Title": "MangaDich",
                 },
                 json={
                     "model": MODEL,
