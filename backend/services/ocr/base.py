@@ -1,18 +1,17 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
+
 class BaseOCR(ABC):
     @abstractmethod
     def load(self) -> None:
-        """Load model into memory — called once at startup"""
-        pass
+        """Load model vào memory — gọi 1 lần lúc khởi động."""
 
     @abstractmethod
     def extract(self, image: np.ndarray) -> list[dict]:
         """
-        Takes numpy array image, returns list of text bubbles:
-        [{ "id": "BUBBLE_0", "x": 10, "y": 20,
-           "width": 100, "height": 50,
-           "rotation": 0, "text": "..." }]
+        Nhận ảnh numpy, trả về danh sách bubble:
+        [{ "id": str, "x": int, "y": int,
+           "width": int, "height": int,
+           "rotation": float, "text": str }]
         """
-        pass

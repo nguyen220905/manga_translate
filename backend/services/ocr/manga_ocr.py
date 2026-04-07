@@ -1,55 +1,118 @@
+"""
+MangaOCR Engine — dành cho manga Nhật.
+
+Phát hiện bubble: CV2 connected components trên vùng trắng,
+loại bỏ vùng chạm biên (= background) để chỉ giữ bubble thật.
+"""
+import logging
+import re
+
+import cv2
 import numpy as np
 from manga_ocr import MangaOcr
-from paddleocr import PaddleOCR
+from PIL import Image as PILImage
+
 from .base import BaseOCR
-import logging
 
 logger = logging.getLogger(__name__)
 
+_HALLUCINATION = re.compile(r"^[\.…\-　\s。、！？!?~〜・ー]+$")
+
+
+def _is_hallucination(text: str) -> bool:
+    t = text.strip()
+    return not t or len(t) <= 1 or bool(_HALLUCINATION.match(t))
+
+
+def detect_text_regions(image: np.ndarray) -> list[tuple]:
+    """
+    Tìm speech bubble trên manga nền tối.
+    Dùng connected components của vùng trắng, loại bỏ vùng chạm biên.
+    """
+    h, w = image.shape[:2]
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+    _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+
+    # Đóng các khe hở nhỏ trong viền bubble
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+    n_labels, labels = cv2.connectedComponents(closed)
+
+    # Nhãn chạm biên = background, không phải bubble
+    border_labels = set()
+    for arr in [labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]]:
+        border_labels.update(arr.tolist())
+    border_labels.discard(0)
+
+    min_area = w * h * 0.001   # 0.1%
+    max_area = w * h * 0.28    # 28%
+
+    regions = []
+    for lbl in range(1, n_labels):
+        if lbl in border_labels:
+            continue
+        mask = (labels == lbl).astype(np.uint8)
+        area = mask.sum()
+        if area < min_area or area > max_area:
+            continue
+
+        ys, xs = np.where(mask)
+        x, y = int(xs.min()), int(ys.min())
+        bw = int(xs.max()) - x
+        bh = int(ys.max()) - y
+
+        if bw < 20 or bh < 20:
+            continue
+        aspect = bw / bh if bh > 0 else 0
+        if aspect > 10 or aspect < 0.1:
+            continue
+
+        pad = 8
+        regions.append((
+            max(0, x - pad),
+            max(0, y - pad),
+            min(w - x, bw + pad * 2),
+            min(h - y, bh + pad * 2),
+        ))
+
+    # Sắp xếp theo thứ tự đọc manga: trên xuống, phải sang trái
+    regions.sort(key=lambda r: (r[1] // 60, -r[0]))
+    return regions
+
+
 class MangaOCREngine(BaseOCR):
+    """MangaOCR — model chuyên biệt cho tiếng Nhật trong manga."""
+
     def __init__(self):
-        self.detector = None
         self.reader = None
 
     def load(self):
-        # PaddleOCR detects layout/bubbles
-        # Manga-OCR reads text highly accurately
-        self.detector = PaddleOCR(use_textline_orientation=True, lang='japan')
         self.reader = MangaOcr()
-        logger.info("[MangaOCR] Loaded for Japanese")
+        logger.info("[MangaOCR] Loaded")
 
     def extract(self, image: np.ndarray) -> list[dict]:
-        layout = self.detector.ocr(image, cls=True)
-        results = []
-        for i, line in enumerate(layout[0] or []):
-            box, (_, conf) = line
-            if conf < 0.5:
-                continue
-            
-            x = int(min(p[0] for p in box))
-            y = int(min(p[1] for p in box))
-            w = int(max(p[0] for p in box)) - x
-            h = int(max(p[1] for p in box)) - y
+        regions = detect_text_regions(image)
+        logger.info(f"[MangaOCR] {len(regions)} vùng candidate")
 
-            # Crop region for Manga-OCR
-            pad = 4
-            crop_y1 = max(0, y - pad)
-            crop_y2 = min(image.shape[0], y + h + pad)
-            crop_x1 = max(0, x - pad)
-            crop_x2 = min(image.shape[1], x + w + pad)
-            
-            crop = image[crop_y1:crop_y2, crop_x1:crop_x2]
-            
-            if crop.size == 0:
+        results = []
+        for i, (x, y, w, h) in enumerate(regions):
+            crop = image[y:y + h, x:x + w]
+            if crop.size == 0 or crop.std() < 12:
                 continue
-                
-            text = self.reader(crop)
+
+            text = self.reader(PILImage.fromarray(crop))
+            if _is_hallucination(text):
+                continue
 
             results.append({
                 "id": f"BUBBLE_{i}",
                 "x": x, "y": y,
                 "width": w, "height": h,
                 "rotation": 0,
-                "text": text
+                "text": text.strip(),
             })
+
+        logger.info(f"[MangaOCR] {len(results)} bubble có text")
         return results

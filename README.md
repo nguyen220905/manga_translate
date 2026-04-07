@@ -1,67 +1,84 @@
-# MangaDich — Manga Translation Web App
+# MangaDich
 
-Translate manga/comic pages to Vietnamese with AI-powered OCR, inpainting, and a Canva-like inline editor.
+Ứng dụng web dịch manga/comic sang tiếng Việt tự động, sử dụng AI để nhận diện chữ (OCR), xóa text gốc (inpainting) và dịch theo ngữ cảnh thể loại.
 
-## Quick Start
+## Yêu cầu
 
-### Backend
+- Python 3.10+
+- Gemini API Key ([lấy tại đây](https://aistudio.google.com/app/apikey))
+
+## Cài đặt & Chạy
+
+**1. Clone và cài dependencies:**
 ```bash
 cd backend
 pip install -r requirements.txt
+```
+
+**2. Tạo file `.env` từ mẫu:**
+```bash
+cp .env.example .env
+# Điền GEMINI_API_KEY vào file .env
+```
+
+**3. Khởi động:**
+```bash
 uvicorn main:app --reload --port 8000
 ```
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
+Truy cập [http://localhost:8000](http://localhost:8000) để sử dụng.
+
+> Hoặc chạy file `start_app.bat` trên Windows.
+
+## Tính năng
+
+- Upload ảnh manga (JPG, PNG, WebP), hỗ trợ nhiều trang cùng lúc
+- OCR chuyên biệt theo ngôn ngữ: MangaOCR (Nhật), PaddleOCR (Trung), EasyOCR (Hàn, Anh)
+- Inpainting xóa text gốc khỏi ảnh bằng OpenCV
+- Dịch sang tiếng Việt với Gemini 2.0 Flash, có ngữ cảnh thể loại (Tu Tiên, Hiện Đại, Hành Động, Shoujo)
+- Editor inline: kéo thả, chỉnh cỡ chữ, sửa nội dung dịch trực tiếp trên ảnh
+- Xuất ảnh đã dịch
+
+## Cấu trúc dự án
+
+```
+project/
+├── backend/
+│   ├── main.py                  # FastAPI app, serve static frontend
+│   ├── database.py              # SQLAlchemy + SQLite
+│   ├── models.py                # ORM: Job, Page, Bubble
+│   ├── schemas.py               # Pydantic schemas
+│   ├── routers/
+│   │   ├── jobs.py              # POST /api/jobs
+│   │   └── pages.py             # GET/PUT /api/pages, /api/bubbles
+│   ├── services/
+│   │   ├── pipeline.py          # Điều phối OCR → Inpaint → Translate
+│   │   ├── ocr_service.py       # Router ngôn ngữ → OCR engine
+│   │   ├── inpaint_service.py   # Xóa text bằng OpenCV
+│   │   ├── translation_service.py # Gọi Gemini API
+│   │   └── ocr/
+│   │       ├── manga_ocr.py     # Nhật
+│   │       ├── chinese_ocr.py   # Trung
+│   │       ├── korean_ocr.py    # Hàn
+│   │       └── easy_ocr.py      # Đa ngôn ngữ (fallback)
+│   ├── uploads/                 # Ảnh upload và ảnh đã inpaint
+│   └── requirements.txt
+├── frontend/
+│   ├── index.html               # Trang upload & cấu hình
+│   ├── editor.html              # Workspace chỉnh sửa
+│   ├── css/style.css
+│   └── js/
+│       ├── api.js               # Fetch wrapper gọi backend
+│       ├── main.js              # Logic trang upload
+│       └── editor.js            # Canvas editor
+└── .env.example
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and start translating!
+## Ngôn ngữ nguồn hỗ trợ
 
-## Features
-- 📤 Upload manga pages (JPG/PNG/WebP)
-- 🔍 OCR text extraction with bounding boxes
-- 🧹 AI text erasure (inpainting)
-- 🌐 Genre-aware Vietnamese translation (Tu Tiên, Đam Mỹ, Romance, 18+)
-- ✏️ Canva-like inline editor (drag, resize, edit text)
-- 💾 Export translated pages
-
-## Project Structure (Cấu trúc dự án)
-
-Dự án được ứng dụng kiến trúc Monorepo, chia làm 2 phần độc lập nhưng giao tiếp chặt chẽ qua REST API.
-
-```text
-MangaDich/
-├── backend/                  # API và Backend xử lý AI (FastAPI, Python)
-│   ├── main.py               # Entry point, khởi tạo app FastAPI và define các REST endpoints
-│   ├── database.py           # Kết nối Database SQLite bằng SQLAlchemy
-│   ├── models.py             # Các Table trong DB (Job, Page, Bubble)
-│   ├── schemas.py            # Pydantic schemas để validate dữ liệu API (Input/Output)
-│   ├── mangadich_v2.db       # File Database cục bộ hiện tại
-│   └── services/             # Thư mục lõi chứa logic nghiệp vụ
-│       ├── ocr_service.py    # Xử lý trích xuất chữ (EasyOCR, có thể mở rộng MangaOCR/PaddleOCR)
-│       ├── inpaint_service.py# Thuật toán OpenCV để xóa mờ chữ dính trên viền ảnh
-│       ├── translation_service.py # Gọi API OpenRouter (Gemini) theo ngữ cảnh (Tu tiên, Đam mỹ...)
-│       └── pipeline.py       # Điều khiển luồng song song: OCR -> Inpaint -> Translation
-├── frontend/                 # Giao diện người dùng (Next.js 16, React 19, TypeScript)
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── globals.css   # Biến CSS cho Dark theme, UI gradients
-│   │   │   ├── layout.tsx    # Wrapper gốc của web
-│   │   │   ├── page.tsx      # Landing page (Trang chủ) + Khu vực Upload file
-│   │   │   └── editor/
-│   │   │       └── [jobId]/page.tsx # Trang Workspace Edit (Hiển thị Editor, Đồng hồ Live timer)
-│   │   ├── components/       # Các mảnh ghép UI tái sử dụng
-│   │   │   ├── CanvasEditor.tsx # Bảng vẽ Canvas tương tác (Kéo thả chữ, trượt size)
-│   │   │   ├── GenrePicker.tsx  # Component chọn thể loại truyện
-│   │   │   ├── JobStatus.tsx    # Cảnh báo trạng thái xử lý
-│   │   │   └── UploadZone.tsx   # Khu vực kéo thả file (Drag & Drop)
-│   │   └── lib/
-│   │       └── api.ts        # Các hàm Fetch gọi trực tiếp xuống Backend API
-│   ├── package.json          # Node dependencies
-│   └── next.config.ts        # Cấu hình Next.js
-├── .env.example              # File biến môi trường mẫu (chứa API Keys)
-└── README.md                 # Tài liệu mô tả dự án
-```
+| Ngôn ngữ | OCR Engine |
+|---|---|
+| Trung Quốc | PaddleOCR |
+| Nhật Bản | MangaOCR |
+| Hàn Quốc | EasyOCR |
+| Tiếng Anh | EasyOCR |

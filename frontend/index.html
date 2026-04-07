@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MangaDich - AI Manga Translator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <div class="container" style="display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 1.8rem;">🎌</span>
+        <div>
+          <h1 style="font-size: 1.4rem; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            MangaDich
+          </h1>
+          <p style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500;">AI Manga Translation</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container page-wrapper">
+    <div style="text-align: center; margin-bottom: 48px;">
+      <h2 class="hero-title">Dịch Manga Tự Động</h2>
+      <p class="hero-subtitle">
+        Upload trang manga &rarr; AI sẽ <strong style="color: var(--accent-purple);">nhận diện chữ</strong>, 
+        <strong style="color: var(--accent-blue);">xóa text gốc</strong>, 
+        <strong style="color: var(--accent-cyan);">dịch sang tiếng Việt</strong> 
+        và ghép lại hoàn hảo trên ảnh gốc.
+      </p>
+    </div>
+
+    <!-- Upload Zone -->
+    <div style="margin-bottom: 32px;">
+      <div class="upload-zone" id="uploadZone">
+        <div style="font-size: 3rem; margin-bottom: 16px;">📥</div>
+        <h3 style="margin-bottom: 8px;">Kéo thả ảnh vào đây</h3>
+        <p style="color: var(--text-muted); margin-bottom: 16px;">Hoặc</p>
+        <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">
+          Chọn File
+        </button>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+      </div>
+      <ul class="file-list" id="fileList"></ul>
+    </div>
+
+    <!-- Options -->
+    <div style="margin-bottom: 32px;">
+      <p class="section-title">Ngôn ngữ gốc</p>
+      <div class="lang-grid" id="langOptions">
+        <div class="selection-card selected" data-value="zh">🇨🇳 Trung Quốc</div>
+        <div class="selection-card" data-value="ja">🇯🇵 Nhật Bản</div>
+        <div class="selection-card" data-value="ko">🇰🇷 Hàn Quốc</div>
+        <div class="selection-card" data-value="en">🇬🇧 Tiếng Anh</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 40px;">
+      <p class="section-title">Thể loại</p>
+      <div class="genre-grid" id="genreOptions">
+        <div class="selection-card selected" data-value="tu_tien">Tu tiên / Cổ đại</div>
+        <div class="selection-card" data-value="hien_dai">Hiện đại</div>
+        <div class="selection-card" data-value="action">Hành động</div>
+        <div class="selection-card" data-value="shoujo">Shoujo / Tình cảm</div>
+      </div>
+    </div>
+
+<div id="errorMsg" style="display: none; padding: 12px 16px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius-sm); color: var(--error-red); margin-bottom: 20px;"></div>
+
+    <div style="text-align: center;">
+      <button class="btn btn-primary" id="submitBtn" style="font-size: 1.1rem; padding: 16px 48px; border-radius: var(--radius-xl);">
+        🚀 Dịch Ngay
+      </button>
+    </div>
+  </main>
+
+  <footer style="padding: 20px 0; border-top: 1px solid var(--border-subtle); text-align: center;">
+    <p style="font-size: 0.8rem; color: var(--text-muted);">MangaDich — Powered by AI · OCR · Inpainting · LLM</p>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

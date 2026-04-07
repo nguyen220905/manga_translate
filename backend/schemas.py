@@ -57,16 +57,12 @@ class PageResponse(BaseModel):
 
 
 # ── Job ─────────────────────────────────────────────────
-class JobCreate(BaseModel):
-    source_language: str = "zh"
-    genre: str = "tu_tien"
-
-
 class JobResponse(BaseModel):
     id: int
     status: str
     source_language: str
     genre: str
+    mode: str = "auto"
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

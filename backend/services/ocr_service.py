@@ -1,90 +1,79 @@
 """
-OCR Service — Router for manga text extraction engines.
-Routes to Manga-OCR (JA), PaddleOCR (ZH, KO), EasyOCR (EN).
-Optimized: engines loaded once at startup, image downscaling, thread pool execution.
+OCR Service — routes mỗi ngôn ngữ sang engine phù hợp, chạy trong thread pool.
+
+Engines:
+  ja → MangaOCREngine   (model chuyên manga Nhật)
+  zh → ChineseOCREngine (CV2 bubble detect + EasyOCR ch_sim)
+  ko → KoreanOCREngine  (flood-fill detect + EasyOCR ko)
+  en → EasyOCREngine    (EasyOCR en)
 """
+import asyncio
+import logging
 import numpy as np
 from PIL import Image
-import logging
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from .ocr.easy_ocr import EasyOCREngine
 from .ocr.manga_ocr import MangaOCREngine
-from .ocr.paddle_ocr import PaddleOCREngine
+from .ocr.chinese_ocr import ChineseOCREngine
+from .ocr.korean_ocr import KoreanOCREngine
+from .ocr.easy_ocr import EasyOCREngine
 
 logger = logging.getLogger(__name__)
 
-# Max image dimension — downscale large images for speed
-MAX_DIM = 1600
+MAX_DIM = 1600  # giới hạn kích thước ảnh trước khi OCR (tăng tốc)
+
 
 class OCRService:
     def __init__(self):
-        # Load all engines once at startup
-        logger.info("Initializing OCR engines...")
         self._engines = {
-            'ja': MangaOCREngine(),
-            'zh': PaddleOCREngine(lang='zh'),
-            'ko': PaddleOCREngine(lang='ko'),
-            'en': EasyOCREngine(langs=['en']),
+            "ja": MangaOCREngine(),
+            "zh": ChineseOCREngine(),
+            "ko": KoreanOCREngine(),
+            "en": EasyOCREngine(langs=["en"]),
         }
         for lang, engine in self._engines.items():
             try:
                 engine.load()
+                logger.info(f"OCR engine [{lang}] loaded OK")
             except Exception as e:
-                logger.error(f"Failed to load OCR engine for {lang}: {e}")
-        logger.info("All OCR engines ready.")
+                logger.error(f"OCR engine [{lang}] FAILED: {e}")
 
     def extract(self, image_path: str, lang: str) -> list[dict]:
-        engine = self._engines.get(lang, self._engines['en'])
-        
-        # Open and downscale image for speed
+        engine = self._engines.get(lang, self._engines["en"])
+
         img = Image.open(image_path).convert("RGB")
         orig_w, orig_h = img.size
 
+        # Downscale nếu ảnh quá lớn
         scale = 1.0
         if max(orig_w, orig_h) > MAX_DIM:
             scale = MAX_DIM / max(orig_w, orig_h)
-            new_w, new_h = int(orig_w * scale), int(orig_h * scale)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-        
-        image_np = np.array(img)
-        
-        # Run OCR
-        results = engine.extract(image_np)
-        
-        # Scale back bboxes
+            img = img.resize((int(orig_w * scale), int(orig_h * scale)), Image.LANCZOS)
+
+        results = engine.extract(np.array(img))
+
+        # Scale bbox về kích thước gốc
         if scale != 1.0:
-            inv_scale = 1.0 / scale
+            inv = 1.0 / scale
             for r in results:
-                r["x"] = int(r["x"] * inv_scale)
-                r["y"] = int(r["y"] * inv_scale)
-                r["width"] = int(r["width"] * inv_scale)
-                r["height"] = int(r["height"] * inv_scale)
-                
-        # Inject default confidence flag for pipeline backward compatibility
+                r["x"] = int(r["x"] * inv)
+                r["y"] = int(r["y"] * inv)
+                r["width"] = int(r["width"] * inv)
+                r["height"] = int(r["height"] * inv)
+
         for r in results:
-            if "confidence" not in r:
-                r["confidence"] = 1.0
-                
+            r.setdefault("confidence", 1.0)
+
         return results
 
-# Singleton pattern - initialized at import time so models load at startup
+
+# Singleton — load models 1 lần lúc khởi động
 ocr_service = OCRService()
 
-# Thread pool for CPU-bound OCR
-_ocr_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ocr")
+_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ocr")
 
-async def run_ocr_async(image_path: str, source_language: str = "zh") -> list[dict]:
-    """Async wrapper to run OCR in a thread pool without blocking the main event loop."""
+
+async def run_ocr_async(image_path: str, lang: str = "zh") -> list[dict]:
+    """Chạy OCR trong thread pool để không block event loop."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        _ocr_pool,
-        ocr_service.extract,
-        image_path,
-        source_language
-    )
-
-def preload_reader(source_language: str = "zh"):
-    """Compatibility function. Engines are already loaded at startup."""
-    pass
+    return await loop.run_in_executor(_pool, ocr_service.extract, image_path, lang)

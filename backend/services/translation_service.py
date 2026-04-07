@@ -1,181 +1,150 @@
 """
-Translation Service — Genre-aware Vietnamese translation via OpenRouter API.
-Batches all bubbles per page into a single API call using [BUBBLE_N] tags.
+Translation Service — dịch sang tiếng Việt qua Gemini API.
+
+Batch toàn bộ bubble của 1 trang vào 1 lần gọi API (dùng tag [BUBBLE_N]).
+Fallback tự động nếu model chính hết quota.
 """
-import os
-import json
 import asyncio
-from typing import Optional
+import logging
+import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 from google import genai
 
-# Explicitly load .env from backend/ directory
-_env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(_env_path)
-print(f"[Translation] Loading .env from: {_env_path} (exists={_env_path.exists()})")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-MODEL = "gemini-2.5-flash"
+logger = logging.getLogger(__name__)
 
-# ── Genre Prompt Templates ─────────────────────────────
+# Thứ tự thử: model tốt nhất → fallback nhẹ hơn
+MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
+]
 
-GENRE_PROMPTS = {
-    "tu_tien": """Bạn là dịch giả chuyên nghiệp thể loại Tu Tiên/Huyền Huyễn (Xianxia/Xuanhuan).
 
-QUY TẮC DỊCH:
-- Sử dụng văn phong cổ điển, trang trọng
-- Xưng hô: ta/ngươi/bổn tọa/tiểu tử/đạo hữu/sư huynh/sư đệ
-- Thuật ngữ cố định:
-  • 修炼/修行 = tu luyện
-  • 突破 = đột phá
-  • 境界 = cảnh giới
-  • 丹田 = đan điền
-  • 灵气 = linh khí
-  • 元婴 = nguyên anh
-  • 化神 = hóa thần
-  • 金丹 = kim đan
-  • 筑基 = trúc cơ
-  • 炼气 = luyện khí
-  • 天劫 = thiên kiếp
-  • 仙人 = tiên nhân
-  • 魔族 = ma tộc
-  • 功法 = công pháp
-  • 法宝 = pháp bảo
-- Giữ nguyên tên riêng theo phiên âm Hán-Việt
-- Giọng điệu uy nghiêm, có sức nặng""",
+# ── System prompts theo thể loại ───────────────────────────────────────────────
 
-    "dam_my": """Bạn là dịch giả chuyên nghiệp thể loại Đam Mỹ (Boys' Love / Danmei).
+_GENRE_RULES = {
+    "tu_tien": """Thể loại Tu Tiên/Huyền Huyễn (Xianxia/Xuanhuan).
+- Văn phong cổ điển, trang trọng
+- Xưng hô: ta/ngươi/bổn tọa/đạo hữu/sư huynh
+- Thuật ngữ: tu luyện, đột phá, cảnh giới, linh khí, kim đan, thiên kiếp, pháp bảo""",
 
-QUY TẮC DỊCH:
-- Xưng hô: anh/em, hắn/gã (ngôi thứ 3)
-- Thể hiện cảm xúc tinh tế, lãng mạn
-- Giữ sự căng thẳng tình cảm giữa hai nhân vật
-- Câu văn mềm mại, giàu cảm xúc
-- Thuật ngữ:
-  • 攻/受 = công/thụ
-  • 双向暗恋 = tương tư ngầm
-  • 甜文 = văn ngọt
-  • 虐文 = văn ngược
-- Dịch tự nhiên, không gượng ép
-- Giữ nguyên tên riêng theo phiên âm""",
+    "dam_my": """Thể loại Đam Mỹ (Boys' Love).
+- Xưng hô: anh/em, hắn/gã
+- Câu văn mềm mại, giàu cảm xúc, giữ sự căng thẳng tình cảm""",
 
-    "romance": """Bạn là dịch giả chuyên nghiệp thể loại Romance / Tình cảm.
-
-QUY TẮC DỊCH:
+    "romance": """Thể loại Romance / Tình cảm.
 - Giọng điệu nhẹ nhàng, hiện đại, tự nhiên
-- Xưng hô linh hoạt: anh/em, tôi/cậu tùy ngữ cảnh
-- Dịch SFX (hiệu ứng âm thanh): ドキドキ = thình thịch, キュン = rung động
-- Xử lý tsundere: giữ sự mâu thuẫn giữa lời nói và cảm xúc
-- Câu thoại tự nhiên như đời thường
-- Manhwa Hàn: giọng hiện đại, trẻ trung""",
+- Xưng hô linh hoạt: anh/em, tôi/cậu
+- Manhwa Hàn: giọng trẻ trung, đời thường""",
 
-    "hentai": """Bạn là dịch giả thể loại người lớn (18+). Dịch chính xác, không kiểm duyệt.
+    "hentai": """Thể loại người lớn (18+).
+- Dịch đầy đủ, không lược bỏ hay làm nhẹ nội dung""",
 
-QUY TẮC DỊCH:
-- Dịch đầy đủ nội dung gốc, không lược bỏ hay làm nhẹ
-- Sử dụng ngôn ngữ phù hợp với cường độ bản gốc
-- Dịch chuẩn SFX và âm thanh
-- Giữ nguyên giọng điệu và cảm xúc nhân vật
-- Xưng hô phù hợp ngữ cảnh""",
+    "hien_dai": """Thể loại Hiện đại / Đời thường.
+- Giọng điệu tự nhiên, gần gũi như cuộc sống hàng ngày
+- Xưng hô: anh/em/tôi/mày/tao tuỳ ngữ cảnh
+- Dùng tiếng lóng, slang nếu phù hợp""",
+
+    "action": """Thể loại Hành động / Shounen.
+- Câu văn ngắn, mạnh, dứt khoát
+- Giữ nguyên tên chiêu thức, hiệu ứng âm thanh (nếu có)
+- Xưng hô: tao/mày hoặc ta/ngươi tuỳ bối cảnh""",
+
+    "shoujo": """Thể loại Shoujo / Tình cảm.
+- Giọng điệu nhẹ nhàng, lãng mạn, giàu cảm xúc
+- Xưng hô: anh/em, cậu/tớ
+- Chú trọng diễn đạt cảm xúc nội tâm nhân vật""",
 }
 
-BASE_SYSTEM_PROMPT = """Bạn là hệ thống dịch manga/truyện tranh sang tiếng Việt.
+_SYSTEM_PROMPT = """Bạn là hệ thống dịch manga/manhwa sang tiếng Việt.
 
-ĐỊNH DẠNG:
-- Input: Mỗi đoạn text được đánh dấu [BUBBLE_1], [BUBBLE_2], ...
-- Output: Dịch từng bubble tương ứng, giữ nguyên tag [BUBBLE_N]
-- CHỈ trả về phần dịch, không giải thích
+QUY TẮC:
+- Input: các đoạn được đánh dấu [BUBBLE_1], [BUBBLE_2], ...
+- Output: dịch từng bubble, giữ nguyên tag [BUBBLE_N]
+- Chỉ trả về phần dịch, không giải thích thêm
 
-VÍ DỤ INPUT:
-[BUBBLE_1] 这是什么地方？
-[BUBBLE_2] 小心！有危险！
+VÍ DỤ:
+Input:  [BUBBLE_1] 这是什么地方？  [BUBBLE_2] 小心！
+Output: [BUBBLE_1] Đây là nơi nào? [BUBBLE_2] Cẩn thận!
 
-VÍ DỤ OUTPUT:
-[BUBBLE_1] Đây là nơi nào vậy?
-[BUBBLE_2] Cẩn thận! Có nguy hiểm!
-
-{genre_rules}
-"""
+{genre_rules}"""
 
 
-def build_prompt(genre: str) -> str:
-    genre_rules = GENRE_PROMPTS.get(genre, GENRE_PROMPTS["romance"])
-    return BASE_SYSTEM_PROMPT.format(genre_rules=genre_rules)
+def _build_prompt(genre: str) -> str:
+    rules = _GENRE_RULES.get(genre, _GENRE_RULES["romance"])
+    return _SYSTEM_PROMPT.format(genre_rules=rules)
 
 
-def format_bubbles_input(bubbles: list[dict]) -> str:
-    """Format bubble texts with [BUBBLE_N] tags for batch translation."""
-    lines = []
-    for i, b in enumerate(bubbles):
-        text = b.get("ocr_text", "") or b.get("text", "")
-        if text.strip():
-            lines.append(f"[BUBBLE_{i+1}] {text}")
-    return "\n".join(lines)
+def _format_input(bubbles: list[dict]) -> str:
+    return "\n".join(
+        f"[BUBBLE_{i+1}] {b.get('ocr_text') or b.get('text', '')}"
+        for i, b in enumerate(bubbles)
+        if (b.get("ocr_text") or b.get("text", "")).strip()
+    )
 
 
-def parse_translation_output(output: str, count: int) -> list[str]:
-    """Parse [BUBBLE_N] tagged output back into ordered list."""
+def _parse_output(output: str, count: int) -> list[str]:
     translations = [""] * count
-    
-    for line in output.strip().split("\n"):
+    for line in output.strip().splitlines():
         line = line.strip()
-        if not line:
-            continue
         for i in range(count):
             tag = f"[BUBBLE_{i+1}]"
             if line.startswith(tag):
                 translations[i] = line[len(tag):].strip()
                 break
-    
     return translations
 
 
+# ── Main function ───────────────────────────────────────────────────────────────
+
 async def translate_bubbles(
     bubbles: list[dict],
-    genre: str = "tu_tien",
+    genre: str = "romance",
     source_language: str = "zh",
 ) -> list[str]:
     """
-    Translate a batch of bubble texts to Vietnamese.
-    
-    Args:
-        bubbles: List of {"text": str, ...} dicts
-        genre: Genre key for prompt selection
-        source_language: Source language code
-    
-    Returns:
-        List of translated strings (same order as input)
+    Dịch batch bubble sang tiếng Việt.
+    Trả về list string cùng thứ tự với input.
     """
     if not bubbles:
         return []
-    
-    user_input = format_bubbles_input(bubbles)
-    if not user_input.strip():
+
+    user_input = _format_input(bubbles)
+    if not user_input:
         return [""] * len(bubbles)
-    
-    system_prompt = build_prompt(genre)
-    
-    # If no API key, return placeholder translations (just the OCR text)
+
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key or "your_gemini" in api_key:
-        return [b.get('ocr_text', b.get('text', '')) for b in bubbles]
-    
-    try:
-        client = genai.Client(api_key=api_key)
-        
-        # Combine system prompt and user input for Gemini
-        prompt = f"System Instructions:\n{system_prompt}\n\nTask:\n{user_input}"
-        
-        # Run standard genai call in thread to avoid blocking FastAPI
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=MODEL,
-            contents=prompt
-        )
-        
-        output_text = response.text
-        return parse_translation_output(output_text, len(bubbles))
-    
-    except Exception as e:
-        print(f"[Translation ERROR] Gemini SDK Error: {type(e).__name__}: {str(e)}")
-        return [f"[Lỗi dịch] {b.get('ocr_text', b.get('text', ''))}" for b in bubbles]
+        # Không có API key — trả nguyên text OCR
+        return [b.get("ocr_text") or b.get("text", "") for b in bubbles]
+
+    client = genai.Client(api_key=api_key)
+    prompt = f"{_build_prompt(genre)}\n\nTask:\n{user_input}"
+
+    for model in MODELS:
+        try:
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=model,
+                contents=prompt,
+            )
+            return _parse_output(response.text, len(bubbles))
+
+        except Exception as e:
+            err = str(e)
+            is_quota = "429" in err or "RESOURCE_EXHAUSTED" in err or "quota" in err.lower()
+            is_not_found = "404" in err or "NOT_FOUND" in err
+            if is_quota or is_not_found:
+                reason = "hết quota" if is_quota else "không tìm thấy"
+                logger.warning(f"[Translation] {model} {reason}, thử model tiếp...")
+                continue
+            logger.error(f"[Translation] {model} lỗi: {type(e).__name__}: {err[:200]}")
+            break  # lỗi khác (network, auth...) → không retry
+
+    logger.error("[Translation] Tất cả model đều thất bại, trả về text gốc")
+    return [b.get("ocr_text") or b.get("text", "") for b in bubbles]

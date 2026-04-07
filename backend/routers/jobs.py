@@ -2,15 +2,17 @@
 Jobs Router — Upload images, create jobs, trigger processing pipeline.
 """
 import os
-import asyncio
 import uuid
+import logging
 from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 from PIL import Image as PILImage
 
 from database import get_db, SessionLocal
 from models import Job, Page, Bubble, JobStatus, Genre, SourceLanguage
-from schemas import JobCreate, JobResponse, JobListResponse
+from schemas import JobResponse, JobListResponse
 from services.pipeline import process_job, UPLOAD_DIR
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -32,7 +34,9 @@ async def create_job(
         raise HTTPException(400, f"Invalid genre: {genre}")
     if not files:
         raise HTTPException(400, "No files uploaded")
-    
+
+    logger.info(f"[create_job] source_language={source_language} genre={genre} files={len(files)}")
+
     # Create job
     job = Job(
         source_language=SourceLanguage(source_language),
@@ -77,7 +81,7 @@ async def create_job(
     
     # Trigger background processing
     background_tasks.add_task(process_job, job.id, SessionLocal)
-    
+
     return job
 
 

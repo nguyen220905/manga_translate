@@ -20,6 +20,9 @@ class Genre(str, enum.Enum):
     DAM_MY = "dam_my"
     ROMANCE = "romance"
     HENTAI = "hentai"
+    HIEN_DAI = "hien_dai"
+    ACTION = "action"
+    SHOUJO = "shoujo"
 
 
 class SourceLanguage(str, enum.Enum):
@@ -51,6 +54,7 @@ class Job(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    mode = Column(String(20), default="auto")
     # ── Timing fields (seconds) ──
     processing_started_at = Column(DateTime, nullable=True)
     ocr_seconds = Column(Float, nullable=True)

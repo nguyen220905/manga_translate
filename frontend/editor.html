@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MangaDich - Editor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header style="padding: 12px 0;">
+    <div class="container" style="display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <a href="/" class="btn btn-secondary" style="padding: 4px 12px; font-size: 0.85rem;">&larr; Thoát</a>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.2rem;">🎌</span>
+          <span style="font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            MangaDich
+          </span>
+        </div>
+        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 4px;" id="jobIdDisplay">
+          / Job #...
+        </span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span id="modeBadge" style="font-size: 0.75rem; padding: 3px 8px; border-radius: 100px;"></span>
+        
+        <div id="liveTimerContainer" style="display: none; align-items: center; gap: 8px;">
+            <span style="color: var(--text-muted); font-size: 0.8rem;">⏱</span>
+            <span id="liveTimerTxt" style="font-family: 'Courier New', monospace; font-size: 1.6rem; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0.0s</span>
+        </div>
+
+        <div id="totalTimeContainer" style="display: none; align-items: center; gap: 6px; padding: 4px 12px; background: rgba(16,185,129,0.15); border-radius: 100px; border: 1px solid rgba(16,185,129,0.3);">
+            <span style="font-size: 0.8rem;">⚡</span>
+            <span id="totalTimeTxt" style="font-family: 'Courier New', monospace; font-weight: 700; color: #34d399; font-size: 0.9rem;"></span>
+        </div>
+
+        <span id="statusBadge" class="status-badge">...</span>
+        
+        <div id="pagination" style="display: flex; gap: 4px;"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-wrapper" style="flex: 1; display: flex; padding: 16px;">
+    <div class="editor-layout" style="flex: 1; width: 100%;">
+      
+      <!-- Main Canvas Area -->
+      <div class="editor-canvas-wrapper" id="canvasWrapper">
+        <!-- Loadings / Errors -->
+        <div id="centerMessage" style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+            <div class="loading-spinner"></div>
+            <p id="centerMessageTxt" style="color: var(--text-secondary); font-size: 1.1rem;">Đang tải...</p>
+        </div>
+
+        <!-- Canvas Container -->
+        <div id="canvasContainer" style="display: none; position: relative; width: 100%; height: 100%; align-items: center; justify-content: center;">
+            <canvas id="editorCanvas" style="border-radius: 8px;"></canvas>
+            <textarea id="inlineTextArea" class="inline-textarea" style="display: none;"></textarea>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="editor-sidebar" id="sidebar">
+        <!-- Timing Results -->
+        <div id="timingResults" style="display: none; padding: 16px; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-bottom: 16px;">
+            <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 12px; color: var(--text-secondary);">⏱ Kết quả thời gian</h4>
+            <div id="timingItems"></div>
+        </div>
+
+        <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 16px;" id="bubbleCountTitle">
+          💬 Text Bubbles (0)
+        </h3>
+
+        <!-- Font Size Slider -->
+        <div id="fontControl" style="display: none; padding: 12px; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--accent-blue); margin-bottom: 16px;">
+            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px;" id="fontSizeLabel">
+                Cỡ chữ: 14px
+            </label>
+            <input type="range" id="fontSizeSlider" min="8" max="72" value="14" style="width: 100%;">
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; margin-bottom: 0;">
+                (Click đúp vào text trên ảnh để sửa nội dung)
+            </p>
+        </div>
+
+        <!-- Bubble List -->
+        <div id="bubbleList"></div>
+
+        <!-- Export -->
+        <div id="exportContainer" style="display: none; margin-top: 20px;">
+            <button id="exportBtn" class="btn btn-primary" style="width: 100%;">📥 Tải ảnh đã dịch</button>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/editor.js"></script>
+</body>
+</html>

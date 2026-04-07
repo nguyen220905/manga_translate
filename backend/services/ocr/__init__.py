@@ -1,6 +1,5 @@
-# Make imports available
 from .base import BaseOCR
 from .easy_ocr import EasyOCREngine
-from .manga_ocr import MangaOCREngine
-from .paddle_ocr import PaddleOCREngine
-from .google_vision import GoogleVisionEngine
+from .manga_ocr import MangaOCREngine, detect_text_regions
+from .chinese_ocr import ChineseOCREngine
+from .korean_ocr import KoreanOCREngine
