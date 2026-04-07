@@ -2,9 +2,6 @@
 MangaDich — FastAPI backend
 """
 import os
-os.environ["FLAGS_use_mkldnn"] = "0"      # tắt oneDNN (crash với PaddleOCR trên 1 số CPU)
-os.environ["FLAGS_enable_pir_api"] = "0"  # tắt PIR executor
-
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

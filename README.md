@@ -78,7 +78,7 @@ project/
 
 | Ngôn ngữ | OCR Engine |
 |---|---|
-| Trung Quốc | PaddleOCR |
+| Trung Quốc | EasyOCR `ch_sim` + CV2 bubble detection |
 | Nhật Bản | MangaOCR |
-| Hàn Quốc | EasyOCR |
-| Tiếng Anh | EasyOCR |
+| Hàn Quốc | EasyOCR `ko` + flood-fill detection |
+| Tiếng Anh | EasyOCR `en` |
