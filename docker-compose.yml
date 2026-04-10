@@ -1,0 +1,72 @@
+# =============================================================================
+# MangaDich — Docker Compose
+#
+# Sử dụng:
+#   Development (hot-reload):  docker compose --profile dev up
+#   Production:                docker compose --profile prod up -d
+#   Dừng:                      docker compose down
+#   Xem logs:                  docker compose logs -f app
+# =============================================================================
+
+services:
+  # ── Production ─────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mangadich-app
+    profiles: ["prod"]
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=sqlite:///./mangadich_v2.db
+    volumes:
+      - mangadich-uploads:/app/backend/uploads
+      - mangadich-db:/app/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  # ── Development (hot-reload) ───────────────────────────────────────────────
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: mangadich-dev
+    profiles: ["dev"]
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=sqlite:///./mangadich_v2.db
+    volumes:
+      # Mount source code → hot-reload khi sửa code
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      # Persist uploads giữa các lần restart
+      - mangadich-uploads:/app/backend/uploads
+    restart: unless-stopped
+
+volumes:
+  mangadich-uploads:
+    driver: local
+  mangadich-db:
+    driver: local

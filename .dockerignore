@@ -1,0 +1,68 @@
+# =============================================================================
+# Docker Ignore — loại trừ file không cần thiết khỏi build context
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+
+# Python bytecode & cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local data (không đưa vào image)
+backend/uploads/*
+backend/*.db
+backend/.env
+
+# Docker files (tránh recursive)
+Dockerfile
+Dockerfile.dev
+docker-compose.yml
+docker-compose.*.yml
+
+# Documentation & scripts
+README.md
+*.bat
+*.sh
+LICENSE
+
+# Gemini / Claude config
+.claude/
+.sixth/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+uploads/
+*.db
+.git/
+.vscode/

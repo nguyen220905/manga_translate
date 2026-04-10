@@ -1,2 +1,8 @@
 backend/.env
 backend/.env.*
+backend/uploads/
+__pycache__/
+*.pyc
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
